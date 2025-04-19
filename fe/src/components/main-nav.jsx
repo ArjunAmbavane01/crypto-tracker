@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 
 import { cn } from "@/lib/utils";
+import { CryptoLogo } from "./landing-page/crypto-logo";
 
 export function MainNav({ className, ...props }) {
   return (
@@ -8,23 +9,9 @@ export function MainNav({ className, ...props }) {
       className={cn("flex items-center space-x-4 lg:space-x-6", className)}
       {...props}
     >
-      <Link
-        to="/dashboard"
-        className="text-sm font-medium transition-colors hover:text-primary"
-      >
-        Dashboard
-      </Link>
-      <Link
-        to="/dashboard?tab=portfolios"
-        className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
-      >
-        Portfolios
-      </Link>
-      <Link
-        to="/dashboard?tab=market"
-        className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
-      >
-        Market
+      <Link to="/" className="flex items-center group">
+        <CryptoLogo className="h-6 w-6 text-primary transition-transform duration-300 group-hover:scale-110" />
+        <span className="ml-2 text-xl font-bold text-black">CryptoTrack</span>
       </Link>
     </nav>
   );

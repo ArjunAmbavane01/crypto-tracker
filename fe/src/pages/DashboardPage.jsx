@@ -59,7 +59,7 @@ export default function DashboardPage() {
       try {
         // Fetch top cryptocurrencies
         const marketResponse = await fetch(
-          "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&page=1&sparkline=true&price_change_percentage=24h,7d"
+          "http://localhost:8080/api/market/top-coins"
         );
         const marketData = await marketResponse.json();
         setMarketData(marketData);
@@ -135,7 +135,7 @@ export default function DashboardPage() {
             </Button>
             <Button
               size="sm"
-              className="h-8 gap-1"
+              className="h-8 gap-1 bg-blue-600 text-white"
               onClick={() => setShowCreatePortfolio(true)}
             >
               <Plus className="h-3.5 w-3.5" />
@@ -149,9 +149,9 @@ export default function DashboardPage() {
           className="space-y-4"
         >
           <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="portfolios">My Portfolios</TabsTrigger>
-            <TabsTrigger value="market">Market</TabsTrigger>
+            <TabsTrigger value="overview" className="cursor-pointer">Overview</TabsTrigger>
+            <TabsTrigger value="portfolios" className="cursor-pointer">My Portfolios</TabsTrigger>
+            <TabsTrigger value="market" className="cursor-pointer">Market</TabsTrigger>
           </TabsList>
           <TabsContent value="overview" className="space-y-4">
             <MarketOverview

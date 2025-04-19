@@ -153,7 +153,7 @@ export function CreatePortfolioDialog({ open, onOpenChange, onPortfolioCreated }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] bg-white">
         <DialogHeader>
           <DialogTitle>Create New Portfolio</DialogTitle>
           <DialogDescription>Create a new portfolio to track your cryptocurrency investments.</DialogDescription>
