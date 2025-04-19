@@ -58,16 +58,12 @@ export default function DashboardPage() {
       setIsLoading(true);
       try {
         // Fetch top cryptocurrencies
-        const marketResponse = await fetch(
-          "http://localhost:8080/api/market/top-coins"
-        );
+        const marketResponse = await fetch("http://localhost:8080/api/market/top-coins");
         const marketData = await marketResponse.json();
         setMarketData(marketData);
 
         // Fetch trending coins
-        const trendingResponse = await fetch(
-          "https://api.coingecko.com/api/v3/search/trending"
-        );
+        const trendingResponse = await fetch("http://localhost:8080/api/market/trending");
         const trendingData = await trendingResponse.json();
         setTrendingCoins(trendingData.coins.map((coin) => coin.item));
       } catch (error) {
@@ -91,9 +87,7 @@ export default function DashboardPage() {
   const refreshData = async () => {
     setIsLoading(true);
     try {
-      const marketResponse = await fetch(
-        "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&page=1&sparkline=true&price_change_percentage=24h,7d"
-      );
+      const marketResponse = await fetch("http://localhost:8080/api/market/top-coins");
       const marketData = await marketResponse.json();
       setMarketData(marketData);
 
