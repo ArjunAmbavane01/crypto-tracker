@@ -10,8 +10,7 @@ import {
   RedirectToSignIn,
 } from "@clerk/clerk-react";
 
-const PUBLISHABLE_KEY =
-  "pk_test_YWxsb3dlZC1oYXdrLTM0LmNsZXJrLmFjY291bnRzLmRldiQ";
+ const PUBLISHABLE_KEY="pk_test_Y3VycmVudC13YXNwLTcwLmNsZXJrLmFjY291bnRzLmRldiQ"
 
 function App() {
   return (

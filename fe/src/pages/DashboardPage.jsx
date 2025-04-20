@@ -33,7 +33,7 @@ import { toast } from "sonner";
 
 export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
-  const [marketData, setMarketData] = useState([]);
+  const [marketData, setMarketData] = useState([]);  // Initialize as empty array
   const [trendingCoins, setTrendingCoins] = useState([]);
   const [showCreatePortfolio, setShowCreatePortfolio] = useState(false);
   const [searchParams] = useSearchParams();
@@ -44,18 +44,22 @@ export default function DashboardPage() {
   useEffect(() => {
     if (user) {
       const syncUser = async () => {
-        const res = await fetch("http://localhost:8080/api/users", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            clerkId: user.id,
-            email: user.primaryEmailAddress?.emailAddress,
-            name: user.fullName,
-          }),
-        });
+        try {
+          const res = await fetch("http://localhost:8080/api/users", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              clerkId: user.id,
+              email: user.primaryEmailAddress?.emailAddress,
+              name: user.fullName,
+            }),
+          });
 
-        if (!res.ok) {
-          console.error("Failed to sync user to backend");
+          if (!res.ok) {
+            console.error("Failed to sync user to backend");
+          }
+        } catch (error) {
+          console.error("Error syncing user:", error);
         }
       };
 
@@ -73,66 +77,82 @@ export default function DashboardPage() {
 
   const handleTabChange = (value) => {
     setActiveTab(value);
-    navigate(`/dashboard?tab=${value}`);
   };
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        // Fetch top cryptocurrencies
-        const marketResponse = await fetch(
-          "http://localhost:8080/api/market/top-coins"
-        );
-        const marketData = await marketResponse.json();
-        setMarketData(marketData);
-
-        // Fetch trending coins
-        const trendingResponse = await fetch(
-          "http://localhost:8080/api/market/trending"
-        );
-        const trendingData = await trendingResponse.json();
-        setTrendingCoins(trendingData.coins.map((coin) => coin.item));
-      } catch (error) {
-        console.error("Error fetching data:", error);
-
-        toast.error("Error fetching data", {
-          description: "Please try again later or check your connection.",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
-    // Set up a refresh interval (every 2 minutes)
-    const intervalId = setInterval(fetchData, 120000);
-
-    return () => clearInterval(intervalId);
-  }, [toast]);
-
-  const refreshData = async () => {
+  const fetchData = async () => {
     setIsLoading(true);
     try {
+      // Fetch top cryptocurrencies
       const marketResponse = await fetch(
         "http://localhost:8080/api/market/top-coins"
       );
+      
+      if (!marketResponse.ok) {
+        throw new Error(`HTTP error! Status: ${marketResponse.status}`);
+      }
+      
       const marketData = await marketResponse.json();
-      setMarketData(marketData);
+      
+      // Verify marketData is an array before setting state
+      if (Array.isArray(marketData)) {
+        setMarketData(marketData);
+        toast.success("Data refreshed", {
+          description: "Market data has been updated.",
+        });
+      } else {
+        console.error("Market data is not an array:", marketData);
+        toast.error("Invalid market data format received");
+        // Maintain current state instead of overwriting with non-array
+      }
 
-      toast.success("Data refreshed", {
-        description: "Market data has been updated.",
-      });
+      // Fetch trending coins
+      const trendingResponse = await fetch(
+        "http://localhost:8080/api/market/trending"
+      );
+      
+      if (!trendingResponse.ok) {
+        throw new Error(`HTTP error! Status: ${trendingResponse.status}`);
+      }
+      
+      const trendingData = await trendingResponse.json();
+      
+      if (trendingData && trendingData.coins) {
+        setTrendingCoins(trendingData.coins.map((coin) => coin.item));
+      } else {
+        console.error("Invalid trending data format:", trendingData);
+        // Keep existing trending coins data
+      }
+      
     } catch (error) {
-      toast.error("Error refreshing data", {
-        description: "Please try again later.",
+      console.error("Error fetching data:", error);
+
+      toast.error("Error fetching data", {
+        description: error.message === "Rate limit exceeded" 
+          ? "Rate limit exceeded. Please try again later." 
+          : "Please try again later or check your connection.",
       });
+      
+      
     } finally {
       setIsLoading(false);
     }
   };
 
-  console.log(marketData)
+  useEffect(() => {
+    fetchData();
+    const intervalId = setInterval(fetchData, 120000);
+
+    return () => clearInterval(intervalId);
+  }, []);
+
+  const refreshData = async () => {
+    await fetchData();
+  };
+
+  const safeSlice = (arr, start, end) => {
+    if (!Array.isArray(arr)) return [];
+    return arr.slice(start, end);
+  };
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -187,7 +207,7 @@ export default function DashboardPage() {
           <TabsContent value="overview" className="space-y-4">
             <MarketOverview
               isLoading={isLoading}
-              marketData={marketData.slice(0, 4)}
+              marketData={safeSlice(marketData, 0, 4)}
             />
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
@@ -201,7 +221,7 @@ export default function DashboardPage() {
                 <CardContent>
                   <CryptoTable
                     isLoading={isLoading}
-                    data={marketData.slice(0, 5)}
+                    data={safeSlice(marketData, 0, 5)}
                   />
                 </CardContent>
                 <CardFooter>
@@ -237,26 +257,26 @@ export default function DashboardPage() {
                               <div className="ml-auto h-4 w-16 animate-pulse rounded bg-muted"></div>
                             </div>
                           ))
-                      : trendingCoins.slice(0, 5).map((coin) => (
+                      : safeSlice(trendingCoins, 0, 5).map((coin) => (
                           <div
-                            key={coin.id}
+                            key={coin?.id || Math.random().toString()}
                             className="flex items-center gap-4"
                           >
                             <div className="h-9 w-9 overflow-hidden rounded-full">
                               <img
-                                src={coin.thumb || "https://placehold.co/100"}
-                                alt={coin.name}
+                                src={coin?.thumb || "https://placehold.co/100"}
+                                alt={coin?.name || "Coin"}
                                 className="h-full w-full object-cover"
                               />
                             </div>
                             <div>
-                              <div className="font-medium">{coin.name}</div>
+                              <div className="font-medium">{coin?.name || "Unknown"}</div>
                               <div className="text-xs text-muted-foreground">
-                                {coin.symbol}
+                                {coin?.symbol || "---"}
                               </div>
                             </div>
                             <div className="ml-auto flex items-center gap-1 text-sm">
-                              <span>#{coin.market_cap_rank}</span>
+                              <span>#{coin?.market_cap_rank || "?"}</span>
                               <ArrowUpRight className="h-3 w-3 text-muted-foreground" />
                             </div>
                           </div>
@@ -278,16 +298,6 @@ export default function DashboardPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center gap-2 mb-4">
-                  <Button variant="outline" size="sm" className="h-8 gap-1">
-                    <span>Filter</span>
-                    <ChevronDown className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button variant="outline" size="sm" className="h-8 gap-1">
-                    <span>Sort by</span>
-                    <ChevronsUpDown className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
                 <CryptoTable isLoading={isLoading} data={marketData} />
               </CardContent>
             </Card>

@@ -30,8 +30,15 @@ export function CreatePortfolioDialog({
   const [coinAmounts, setCoinAmounts] = useState({});
   const [availableCoins, setAvailableCoins] = useState([]);
   const [isCreating, setIsCreating] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [formErrors, setFormErrors] = useState({
+    portfolioName: "",
+    selectedCoins: "",
+    coinAmounts: {},
+  });
 
-  const { user } = useUser();
+  const { user, isLoaded } = useUser();
 
   useEffect(() => {
     const fetchCoins = async () => {
@@ -51,16 +58,43 @@ export function CreatePortfolioDialog({
     fetchCoins();
   }, [open]);
 
+  useEffect(() => {
+    if (!open) {
+      // Reset form state when dialog closes
+      resetForm();
+    }
+  }, [open]);
+
+  const resetForm = () => {
+    setPortfolioName("");
+    setIsLocked(false);
+    setSearchTerm("");
+    setSelectedCoins([]);
+    setCoinAmounts({});
+    setFormErrors({
+      portfolioName: "",
+      selectedCoins: "",
+      coinAmounts: {},
+    });
+    setError(null);
+  };
+
   const filteredCoins = availableCoins.filter(
     (coin) =>
-      coin.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      coin.symbol.toLowerCase().includes(searchTerm.toLowerCase())
+      coin.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      coin.symbol?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleSelectCoin = (coin) => {
     if (!selectedCoins.some((c) => c.id === coin.id)) {
       setSelectedCoins([...selectedCoins, coin]);
       setCoinAmounts({ ...coinAmounts, [coin.id]: 0 });
+
+      // Clear any error for selected coins
+      setFormErrors((prev) => ({
+        ...prev,
+        selectedCoins: "",
+      }));
     }
   };
 
@@ -69,82 +103,174 @@ export function CreatePortfolioDialog({
     const newAmounts = { ...coinAmounts };
     delete newAmounts[coinId];
     setCoinAmounts(newAmounts);
+
+    // Clear any error for this specific coin
+    const newCoinAmountErrors = { ...formErrors.coinAmounts };
+    delete newCoinAmountErrors[coinId];
+    setFormErrors((prev) => ({
+      ...prev,
+      coinAmounts: newCoinAmountErrors,
+    }));
+
+    // If no coins are left, show an error
+    if (selectedCoins.length <= 1) {
+      setFormErrors((prev) => ({
+        ...prev,
+        selectedCoins: "Please add at least one coin to your portfolio.",
+      }));
+    }
   };
 
   const handleAmountChange = (coinId, amount) => {
-    const numAmount = Number.parseFloat(amount) || 0;
-    setCoinAmounts({ ...coinAmounts, [coinId]: numAmount });
+    // Validate input is a positive number
+    let numAmount = parseFloat(amount);
+
+    // Update coin amount
+    setCoinAmounts({ ...coinAmounts, [coinId]: numAmount || 0 });
+
+    // Validate and set error if needed
+    const newCoinAmountErrors = { ...formErrors.coinAmounts };
+    if (isNaN(numAmount) || numAmount < 0) {
+      newCoinAmountErrors[coinId] = "Please enter a valid positive number";
+    } else {
+      delete newCoinAmountErrors[coinId];
+    }
+
+    setFormErrors((prev) => ({
+      ...prev,
+      coinAmounts: newCoinAmountErrors,
+    }));
   };
 
   const calculateTotalValue = () => {
     return selectedCoins.reduce((total, coin) => {
-      const amount = coinAmounts[coin.id] || 0;
-      return total + amount * coin.price;
+      const amount = parseFloat(coinAmounts[coin.id]) || 0;
+      return total + amount * (coin.price || 0);
     }, 0);
   };
 
-  const handleCreatePortfolio = async () => {
-    console.log(portfolioName);
-    console.log(selectedCoins);
+  const validateForm = () => {
+    const errors = {
+      portfolioName: "",
+      selectedCoins: "",
+      coinAmounts: {},
+    };
+    let isValid = true;
+
+    // Validate portfolio name
     if (!portfolioName.trim()) {
-      toast.error("Portfolio name required", {
-        description: "Please enter a name for your portfolio.",
-      });
+      errors.portfolioName = "Portfolio name is required";
+      isValid = false;
+    }
+
+    // Validate coins selection
+    if (selectedCoins.length === 0) {
+      errors.selectedCoins = "Please add at least one coin to your portfolio";
+      isValid = false;
+    }
+
+    // Validate coin amounts
+    let hasValidAmount = false;
+    selectedCoins.forEach((coin) => {
+      const amount = parseFloat(coinAmounts[coin.id]);
+      if (isNaN(amount) || amount <= 0) {
+        errors.coinAmounts[coin.id] = "Please enter a valid amount";
+        isValid = false;
+      } else {
+        hasValidAmount = true;
+      }
+    });
+
+    if (selectedCoins.length > 0 && !hasValidAmount) {
+      errors.selectedCoins = "At least one coin must have a valid amount";
+      isValid = false;
+    }
+
+    setFormErrors(errors);
+    return isValid;
+  };
+
+  const handleCreatePortfolio = async () => {
+    if (!validateForm()) {
       return;
     }
 
-    if (selectedCoins.length === 0) {
-      toast.error("No coins selected", {
-        description: "Please add at least one coin to your portfolio.",
-      });
-      return;
-    }
     setIsCreating(true);
-    const clerkId = user?.id;
-    const newPortfolio = {
-      userId: clerkId,
-      name: portfolioName,
-      isLocked,
-      totalValue: calculateTotalValue(),
-      change24h: Math.random() * 10 - 5,
-      coins: selectedCoins.map((coin) => ({
-        id: coin.id,
-        name: coin.name,
-        symbol: coin.symbol,
-        amount: coinAmounts[coin.id] || 0,
-        value: (coinAmounts[coin.id] || 0) * coin.price,
-        change24h: Math.random() * 10 - 5,
-      })),
-    };
 
     try {
+      if (!isLoaded || !user) {
+        throw new Error("User authentication required");
+      }
+
+      const clerkId = user.id;
+      const totalValue = calculateTotalValue();
+
+      const newPortfolio = {
+        userId: clerkId,
+        name: portfolioName,
+        isLocked,
+        totalValue,
+        change24h: 0, // We'll calculate this properly
+        coins: selectedCoins.map((coin) => {
+          const amount = parseFloat(coinAmounts[coin.id]) || 0;
+          return {
+            id: coin.id,
+            name: coin.name,
+            symbol: coin.symbol,
+            amount,
+            value: amount * (coin.price || 0),
+            price: coin.price || 0,
+            change24h: coin.price_change_percentage_24h || 0,
+          };
+        }),
+      };
+
+      // Calculate portfolio 24h change as weighted average of coins
+      if (newPortfolio.totalValue > 0) {
+        newPortfolio.change24h =
+          newPortfolio.coins.reduce(
+            (acc, coin) => acc + coin.change24h * coin.value,
+            0
+          ) / newPortfolio.totalValue;
+      }
+
       const res = await fetch("http://localhost:8080/api/portfolios", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newPortfolio),
       });
-      if (!res.ok) throw new Error("Failed to create portfolio");
-      console.log("here");
 
-      const created = await res.text();
-      console.log("here2");
-      if (onPortfolioCreated) onPortfolioCreated({...newPortfolio,id:newPortfolio.userId+newPortfolio.name});
-      console.log("here3");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(
+          errorData.message || `Failed to create portfolio (${res.status})`
+        );
+      }
+
+      // Generate a unique ID for the portfolio if the API doesn't provide one
+      const portfolioId = `${clerkId}-${Date.now()}-${portfolioName.replace(
+        /\s+/g,
+        "-"
+      )}`;
+      const createdPortfolio = {
+        ...newPortfolio,
+        id: portfolioId,
+      };
+
+      if (onPortfolioCreated) {
+        onPortfolioCreated(createdPortfolio);
+      }
 
       toast.success("Portfolio created", {
         description: `${portfolioName} has been created successfully.`,
       });
 
-      // Reset form
-      setPortfolioName("");
-      setIsLocked(false);
-      setSearchTerm("");
-      setSelectedCoins([]);
-      setCoinAmounts({});
+      // Close dialog
       onOpenChange(false);
     } catch (error) {
+      console.error("Failed to create portfolio:", error);
       toast.error("Creation failed", {
-        description: "Please try again.",
+        description: error.message || "Please try again.",
       });
     } finally {
       setIsCreating(false);
@@ -160,14 +286,36 @@ export function CreatePortfolioDialog({
             Create a new portfolio to track your cryptocurrency investments.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Show error if any */}
+        {error && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="name">Portfolio Name</Label>
+            <Label htmlFor="name" className="flex justify-between">
+              Portfolio Name
+              {formErrors.portfolioName && (
+                <span className="text-red-500 text-xs">
+                  {formErrors.portfolioName}
+                </span>
+              )}
+            </Label>
             <Input
               id="name"
               placeholder="My Portfolio"
               value={portfolioName}
-              onChange={(e) => setPortfolioName(e.target.value)}
+              onChange={(e) => {
+                setPortfolioName(e.target.value);
+                if (e.target.value.trim()) {
+                  setFormErrors((prev) => ({ ...prev, portfolioName: "" }));
+                }
+              }}
+              className={formErrors.portfolioName ? "border-red-500" : ""}
             />
           </div>
           <div className="flex items-center gap-2">
@@ -175,6 +323,7 @@ export function CreatePortfolioDialog({
               id="locked"
               checked={isLocked}
               onCheckedChange={setIsLocked}
+              className="bg-gray-100 data-[state=checked]:bg-blue-300 border-2" 
             />
             <Label htmlFor="locked" className="flex items-center gap-1">
               <Lock className="h-4 w-4" />
@@ -182,7 +331,14 @@ export function CreatePortfolioDialog({
             </Label>
           </div>
           <div className="grid gap-2">
-            <Label>Add Cryptocurrencies</Label>
+            <Label className="flex justify-between">
+              Add Cryptocurrencies
+              {formErrors.selectedCoins && (
+                <span className="text-red-500 text-xs">
+                  {formErrors.selectedCoins}
+                </span>
+              )}
+            </Label>
             <div className="relative">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -190,9 +346,15 @@ export function CreatePortfolioDialog({
                 className="pl-8"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                disabled={isLoading}
               />
             </div>
-            {searchTerm && (
+
+            {isLoading ? (
+              <div className="p-4 flex justify-center">
+                <Loader2 className="animate-spin h-6 w-6 text-muted-foreground" />
+              </div>
+            ) : searchTerm ? (
               <div className="max-h-[150px] overflow-y-auto rounded-md border p-2">
                 {filteredCoins.length > 0 ? (
                   filteredCoins.map((coin) => (
@@ -207,6 +369,10 @@ export function CreatePortfolioDialog({
                             src={coin.image || "/placeholder.svg"}
                             alt={coin.name}
                             className="h-full w-full object-cover"
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = "/placeholder.svg";
+                            }}
                           />
                         </div>
                         <div>
@@ -217,7 +383,7 @@ export function CreatePortfolioDialog({
                         </div>
                       </div>
                       <div className="text-sm">
-                        ${coin.price.toLocaleString()}
+                        ${(coin.price || 0).toLocaleString()}
                       </div>
                     </div>
                   ))
@@ -227,8 +393,9 @@ export function CreatePortfolioDialog({
                   </div>
                 )}
               </div>
-            )}
+            ) : null}
           </div>
+
           {selectedCoins.length > 0 && (
             <div className="space-y-2">
               <Label>Selected Coins</Label>
@@ -244,6 +411,10 @@ export function CreatePortfolioDialog({
                           src={coin.image || "/placeholder.svg"}
                           alt={coin.name}
                           className="h-full w-full object-cover"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = "/placeholder.svg";
+                          }}
                         />
                       </div>
                       <div className="font-medium">
@@ -251,15 +422,28 @@ export function CreatePortfolioDialog({
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        placeholder="Amount"
-                        className="w-24"
-                        value={coinAmounts[coin.id] || ""}
-                        onChange={(e) =>
-                          handleAmountChange(coin.id, e.target.value)
-                        }
-                      />
+                      <div className="flex flex-col">
+                        <Input
+                          type="number"
+                          placeholder="Amount"
+                          className={`w-24 ${
+                            formErrors.coinAmounts[coin.id]
+                              ? "border-red-500"
+                              : ""
+                          }`}
+                          value={coinAmounts[coin.id] || ""}
+                          onChange={(e) =>
+                            handleAmountChange(coin.id, e.target.value)
+                          }
+                          min="0"
+                          step="any"
+                        />
+                        {formErrors.coinAmounts[coin.id] && (
+                          <span className="text-red-500 text-xs mt-1">
+                            {formErrors.coinAmounts[coin.id]}
+                          </span>
+                        )}
+                      </div>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -283,10 +467,14 @@ export function CreatePortfolioDialog({
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isCreating}
+          >
             Cancel
           </Button>
-          <Button onClick={handleCreatePortfolio}>
+          <Button onClick={handleCreatePortfolio} disabled={isCreating}>
             {isCreating ? (
               <>
                 <Loader2 className="animate-spin size-4 mr-2" />

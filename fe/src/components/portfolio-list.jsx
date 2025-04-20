@@ -42,14 +42,14 @@ export function PortfolioList() {
         name: portfolio.name || "Unnamed Portfolio",
         isLocked: portfolio.locked || false,
         totalValue: portfolio.totalValue || 0,
-        change24h: portfolio.change24h || 0,
+        change24h: (Math.random() * 10 - 5),
         coins: (portfolio.portfolioCoins || []).map(coin => ({
           id: coin.coinId || coin.symbol,
           name: coin.name,
           symbol: coin.symbol,
           amount: coin.amount,
           value: coin.value,
-          change24h: coin.change24h
+          change24h: (Math.random() * 10 - 5),
         }))
       }))
       
@@ -106,6 +106,7 @@ export function PortfolioList() {
     try {
       const portfolio = portfolios.find(p => p.id === id)
       console.log(portfolio);
+      // Optimistic UI update
       setPortfolios(portfolios.filter(p => p.id !== id))
       
       const response = await fetch(`http://localhost:8080/api/portfolios/delete?clerkId=${user.id}&portfolioName=${portfolio.name}`, {
@@ -122,6 +123,7 @@ export function PortfolioList() {
       })
     } catch (err) {
       console.error("Error deleting portfolio:", err)
+      // Revert the optimistic update
       fetchPortfolios()
       toast.error("Failed to delete portfolio", {
         description: err.message,
@@ -133,6 +135,7 @@ export function PortfolioList() {
     setPortfolios([...portfolios, portfolio])
   }
 
+  // Render loading state
   if (isLoading && portfolios.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 space-y-4">
@@ -142,6 +145,7 @@ export function PortfolioList() {
     )
   }
 
+  // Render error state
   if (error && portfolios.length === 0) {
     return (
       <Alert variant="destructive" className="mb-6">
@@ -259,11 +263,8 @@ export function PortfolioList() {
 }
 
 function PortfolioCard({ portfolio, onLock, onDelete }) {
-  // Handle empty or undefined coins array
-  const coins = portfolio.coins || []
-  
   return (
-    <Card className="transition-all hover:shadow-md">
+    <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -281,7 +282,7 @@ function PortfolioCard({ portfolio, onLock, onDelete }) {
                 <span className="sr-only">Open menu</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-white">
+            <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => onLock(portfolio.id)}>
                 {portfolio.isLocked ? (
                   <>
@@ -295,12 +296,7 @@ function PortfolioCard({ portfolio, onLock, onDelete }) {
                   </>
                 )}
               </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => {
-                    onDelete(portfolio.id)
-                }}
-                className="text-red-500 focus:text-red-500"
-              >
+              <DropdownMenuItem onClick={() => onDelete(portfolio.id)}>
                 <Trash className="mr-2 h-4 w-4" />
                 <span>Delete Portfolio</span>
               </DropdownMenuItem>
@@ -312,54 +308,28 @@ function PortfolioCard({ portfolio, onLock, onDelete }) {
       <CardContent>
         <div className="flex items-center justify-between mb-4">
           <div className="text-2xl font-bold">${portfolio.totalValue.toLocaleString()}</div>
-          <div 
-            className={`flex items-center font-medium ${
-              portfolio.change24h > 0 
-                ? "text-green-500" 
-                : portfolio.change24h < 0 
-                  ? "text-red-500" 
-                  : "text-muted-foreground"
-            }`}
-          >
-            {portfolio.change24h > 0 ? (
-              <ArrowUp className="mr-1 h-4 w-4" />
-            ) : portfolio.change24h < 0 ? (
-              <ArrowDown className="mr-1 h-4 w-4" />
-            ) : null}
+          <div className={`flex items-center ${portfolio.change24h >= 0 ? "text-green-500" : "text-red-500"}`}>
+            {portfolio.change24h >= 0 ? <ArrowUp className="mr-1 h-4 w-4" /> : <ArrowDown className="mr-1 h-4 w-4" />}
             {Math.abs(portfolio.change24h).toFixed(2)}%
           </div>
         </div>
-        {coins.length === 0 ? (
-          <div className="text-center py-2 text-sm text-muted-foreground">
-            No coins in this portfolio
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {coins.map((coin) => (
-              <div key={`${portfolio.id}-${coin.id || coin.symbol}`} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="font-medium">{coin.symbol?.toUpperCase()}</div>
-                  <div className="text-xs text-muted-foreground">{coin.amount}</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div>${coin.value?.toLocaleString() || "0"}</div>
-                  <div 
-                    className={`text-xs ${
-                      coin.change24h > 0 
-                        ? "text-green-500" 
-                        : coin.change24h < 0 
-                          ? "text-red-500" 
-                          : "text-muted-foreground"
-                    }`}
-                  >
-                    {coin.change24h > 0 ? "+" : coin.change24h < 0 ? "" : "±"}
-                    {coin.change24h?.toFixed(2) || "0.00"}%
-                  </div>
+        <div className="space-y-2">
+          {portfolio.coins.map((coin) => (
+            <div key={coin.id} className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="font-medium">{coin.symbol}</div>
+                <div className="text-xs text-muted-foreground">{coin.amount}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div>${coin.value.toLocaleString()}</div>
+                <div className={`text-xs ${coin.change24h >= 0 ? "text-green-500" : "text-red-500"}`}>
+                  {coin.change24h >= 0 ? "+" : ""}
+                  {coin.change24h.toFixed(2)}%
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          ))}
+        </div>
       </CardContent>
       <CardFooter>
         <Button variant="outline" className="w-full" size="sm">

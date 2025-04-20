@@ -1,23 +1,56 @@
-import { ArrowDown, ArrowUp, DollarSign, TrendingUp } from "lucide-react"
-
+import { ArrowDown, ArrowUp, DollarSign, TrendingUp, AlertCircle } from "lucide-react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { CryptoChart } from "@/components/crypto-chart"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
-export function MarketOverview({ isLoading, marketData }) {
-  // Calculate total market cap
-  const totalMarketCap = marketData.reduce((acc, coin) => acc + (coin.market_cap || 0), 0)
+export function MarketOverview({ isLoading, marketData, error }) {
+  const [totalMarketCap, setTotalMarketCap] = useState(0)
+  const [total24hVolume, setTotal24hVolume] = useState(0)
+  const [marketCapChangePercentage, setMarketCapChangePercentage] = useState(0)
 
-  // Calculate 24h volume
-  const total24hVolume = marketData.reduce((acc, coin) => acc + (coin.total_volume || 0), 0)
+  useEffect(() => {
+    if (!isLoading && marketData && marketData.length > 0) {
+      // Calculate total market cap
+      const marketCap = marketData.reduce((acc, coin) => acc + (coin.market_cap || 0), 0)
+      setTotalMarketCap(marketCap)
 
-  // Calculate market cap change percentage (weighted average)
-  const marketCapChangePercentage =
-    marketData.length > 0
-      ? marketData.reduce(
-          (acc, coin) => acc + (coin.market_cap_change_percentage_24h || 0) * (coin.market_cap || 0),
-          0,
-        ) / totalMarketCap
-      : 0
+      // Calculate 24h volume
+      const volume = marketData.reduce((acc, coin) => acc + (coin.total_volume || 0), 0)
+      setTotal24hVolume(volume)
+
+      // Calculate market cap change percentage (weighted average)
+      const capChange = marketData.reduce(
+        (acc, coin) => acc + (coin.market_cap_change_percentage_24h || 0) * (coin.market_cap || 0),
+        0
+      ) / marketCap
+      
+      setMarketCapChangePercentage(capChange)
+    }
+  }, [isLoading, marketData])
+
+  if (error) {
+    return (
+      <Alert variant="destructive" className="mb-4">
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          Error loading market data: {error}. Please try refreshing the page.
+        </AlertDescription>
+      </Alert>
+    )
+  }
+
+  const formatNumber = (num) => {
+    if (num >= 1_000_000_000_000) {
+      return `$${(num / 1_000_000_000_000).toFixed(2)}T`
+    } else if (num >= 1_000_000_000) {
+      return `$${(num / 1_000_000_000).toFixed(2)}B`
+    } else if (num >= 1_000_000) {
+      return `$${(num / 1_000_000).toFixed(2)}M`
+    } else {
+      return `$${num.toLocaleString()}`
+    }
+  }
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -34,7 +67,7 @@ export function MarketOverview({ isLoading, marketData }) {
             </div>
           ) : (
             <>
-              <div className="text-2xl font-bold">${(totalMarketCap / 1_000_000_000).toFixed(2)}B</div>
+              <div className="text-2xl font-bold">{formatNumber(totalMarketCap)}</div>
               <p
                 className={`text-xs ${marketCapChangePercentage >= 0 ? "text-green-500" : "text-red-500"} flex items-center`}
               >
@@ -43,7 +76,7 @@ export function MarketOverview({ isLoading, marketData }) {
                 ) : (
                   <ArrowDown className="mr-1 h-3 w-3" />
                 )}
-                {Math.abs(marketCapChangePercentage).toFixed(2)}% from yesterday
+                {!isNaN(marketCapChangePercentage) ? Math.abs(marketCapChangePercentage).toFixed(2) : "0.00"}% from yesterday
               </p>
             </>
           )}
@@ -62,19 +95,27 @@ export function MarketOverview({ isLoading, marketData }) {
             </div>
           ) : (
             <>
-              <div className="text-2xl font-bold">${(total24hVolume / 1_000_000_000).toFixed(2)}B</div>
+              <div className="text-2xl font-bold">{formatNumber(total24hVolume)}</div>
               <p className="text-xs text-muted-foreground">Across all cryptocurrencies</p>
             </>
           )}
         </CardContent>
       </Card>
-      {marketData.slice(0, 2).map((coin, index) => (
-        <Card key={coin?.id || index}>
+      {marketData && marketData.slice(0, 2).map((coin, index) => (
+        <Card key={coin?.id || `coin-${index}`}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{coin?.name || `Cryptocurrency ${index + 1}`}</CardTitle>
             <div className="h-4 w-4 overflow-hidden rounded-full">
               {coin?.image && (
-                <img src={coin.image || "/placeholder.svg"} alt={coin.name} className="h-full w-full object-cover" />
+                <img 
+                  src={coin.image} 
+                  alt={coin.name} 
+                  className="h-full w-full object-cover" 
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = "/placeholder.svg";
+                  }}
+                />
               )}
             </div>
           </CardHeader>
