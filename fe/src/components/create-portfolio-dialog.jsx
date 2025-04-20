@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Lock, Plus, Search, X } from "lucide-react";
+import { Loader2, Lock, Plus, Search, X } from "lucide-react";
 import { useUser } from "@clerk/clerk-react";
 
 import { Button } from "./ui/button";
@@ -29,6 +29,9 @@ export function CreatePortfolioDialog({
   const [selectedCoins, setSelectedCoins] = useState([]);
   const [coinAmounts, setCoinAmounts] = useState({});
   const [availableCoins, setAvailableCoins] = useState([]);
+  const [isCreating, setIsCreating] = useState(false);
+
+  const { user } = useUser();
 
   useEffect(() => {
     const fetchCoins = async () => {
@@ -44,9 +47,9 @@ export function CreatePortfolioDialog({
         }
       }
       console.log(availableCoins);
-      fetchCoins();
     };
-  }, []);
+    fetchCoins();
+  }, [open]);
 
   const filteredCoins = availableCoins.filter(
     (coin) =>
@@ -81,6 +84,8 @@ export function CreatePortfolioDialog({
   };
 
   const handleCreatePortfolio = async () => {
+    console.log(portfolioName);
+    console.log(selectedCoins);
     if (!portfolioName.trim()) {
       toast.error("Portfolio name required", {
         description: "Please enter a name for your portfolio.",
@@ -94,10 +99,8 @@ export function CreatePortfolioDialog({
       });
       return;
     }
-
-    const { user } = useUser();
+    setIsCreating(true);
     const clerkId = user?.id;
-
     const newPortfolio = {
       userId: clerkId,
       name: portfolioName,
@@ -115,16 +118,18 @@ export function CreatePortfolioDialog({
     };
 
     try {
-      const res = await fetch("/api/portfolios", {
+      const res = await fetch("http://localhost:8080/api/portfolios", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newPortfolio),
       });
-
       if (!res.ok) throw new Error("Failed to create portfolio");
+      console.log("here");
 
-      const created = await res.json();
-      if (onPortfolioCreated) onPortfolioCreated(created);
+      const created = await res.text();
+      console.log("here2");
+      if (onPortfolioCreated) onPortfolioCreated({...newPortfolio,id:newPortfolio.userId+newPortfolio.name});
+      console.log("here3");
 
       toast.success("Portfolio created", {
         description: `${portfolioName} has been created successfully.`,
@@ -141,6 +146,8 @@ export function CreatePortfolioDialog({
       toast.error("Creation failed", {
         description: "Please try again.",
       });
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -280,8 +287,17 @@ export function CreatePortfolioDialog({
             Cancel
           </Button>
           <Button onClick={handleCreatePortfolio}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Portfolio
+            {isCreating ? (
+              <>
+                <Loader2 className="animate-spin size-4 mr-2" />
+                Creating...
+              </>
+            ) : (
+              <>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Portfolio
+              </>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

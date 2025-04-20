@@ -15,7 +15,8 @@ import java.util.List;
 @AllArgsConstructor
 public class User {
     @Id
-    private String id; // Using Clerk ID directly
+    @Column(name = "id")
+    private String clerkId;
 
     private String email;
     private String name;

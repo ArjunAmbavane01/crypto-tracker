@@ -105,7 +105,7 @@ export function PortfolioList() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {portfolios.map((portfolio) => (
               <PortfolioCard
-                key={portfolio.id}
+                key={portfolio.name}
                 portfolio={portfolio}
                 onLock={handleLockPortfolio}
                 onDelete={handleDeletePortfolio}
@@ -135,7 +135,7 @@ export function PortfolioList() {
               .filter((portfolio) => !portfolio.isLocked)
               .map((portfolio) => (
                 <PortfolioCard
-                  key={portfolio.id}
+                  key={portfolio.name}
                   portfolio={portfolio}
                   onLock={handleLockPortfolio}
                   onDelete={handleDeletePortfolio}

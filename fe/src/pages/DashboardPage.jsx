@@ -7,7 +7,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-
+import { useUser } from "@clerk/clerk-react";
 import { Button } from "../components/ui/button";
 import {
   Card,
@@ -39,6 +39,29 @@ export default function DashboardPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("overview");
+  const { user } = useUser();
+
+  useEffect(() => {
+    if (user) {
+      const syncUser = async () => {
+        const res = await fetch("http://localhost:8080/api/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            clerkId: user.id,
+            email: user.primaryEmailAddress?.emailAddress,
+            name: user.fullName,
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("Failed to sync user to backend");
+        }
+      };
+
+      syncUser();
+    }
+  }, [user]);
 
   useEffect(() => {
     // Get tab from URL if present
@@ -58,12 +81,16 @@ export default function DashboardPage() {
       setIsLoading(true);
       try {
         // Fetch top cryptocurrencies
-        const marketResponse = await fetch("http://localhost:8080/api/market/top-coins");
+        const marketResponse = await fetch(
+          "http://localhost:8080/api/market/top-coins"
+        );
         const marketData = await marketResponse.json();
         setMarketData(marketData);
 
         // Fetch trending coins
-        const trendingResponse = await fetch("http://localhost:8080/api/market/trending");
+        const trendingResponse = await fetch(
+          "http://localhost:8080/api/market/trending"
+        );
         const trendingData = await trendingResponse.json();
         setTrendingCoins(trendingData.coins.map((coin) => coin.item));
       } catch (error) {
@@ -87,7 +114,9 @@ export default function DashboardPage() {
   const refreshData = async () => {
     setIsLoading(true);
     try {
-      const marketResponse = await fetch("http://localhost:8080/api/market/top-coins");
+      const marketResponse = await fetch(
+        "http://localhost:8080/api/market/top-coins"
+      );
       const marketData = await marketResponse.json();
       setMarketData(marketData);
 
@@ -102,6 +131,8 @@ export default function DashboardPage() {
       setIsLoading(false);
     }
   };
+
+  console.log(marketData)
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -143,9 +174,15 @@ export default function DashboardPage() {
           className="space-y-4"
         >
           <TabsList>
-            <TabsTrigger value="overview" className="cursor-pointer">Overview</TabsTrigger>
-            <TabsTrigger value="portfolios" className="cursor-pointer">My Portfolios</TabsTrigger>
-            <TabsTrigger value="market" className="cursor-pointer">Market</TabsTrigger>
+            <TabsTrigger value="overview" className="cursor-pointer">
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="portfolios" className="cursor-pointer">
+              My Portfolios
+            </TabsTrigger>
+            <TabsTrigger value="market" className="cursor-pointer">
+              Market
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="overview" className="space-y-4">
             <MarketOverview
