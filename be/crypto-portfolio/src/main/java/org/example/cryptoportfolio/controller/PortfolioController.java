@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @RestController
@@ -48,5 +49,37 @@ public class PortfolioController {
         portfolioRepository.save(portfolio);
 
         return ResponseEntity.ok("Portfolio created successfully");
+    }
+
+    /**
+     * Get all portfolios for a specific user
+     */
+    @GetMapping("/user/{clerkId}")
+    public ResponseEntity<?> getUserPortfolios(@PathVariable String clerkId) {
+        User user = userRepository.findById(clerkId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        return ResponseEntity.ok(user.getPortfolios());
+    }
+
+    /**
+     * Delete a portfolio by user ID and portfolio name
+     */
+    @DeleteMapping("/delete")
+    public ResponseEntity<?> deletePortfolio(@RequestParam String clerkId, @RequestParam String portfolioName) {
+        User user = userRepository.findById(clerkId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Find the portfolio with matching name belonging to the user
+        Optional<Portfolio> portfolioToDelete = user.getPortfolios().stream()
+                .filter(portfolio -> portfolio.getName().equals(portfolioName))
+                .findFirst();
+
+        if (portfolioToDelete.isPresent()) {
+            portfolioRepository.delete(portfolioToDelete.get());
+            return ResponseEntity.ok("Portfolio deleted successfully");
+        } else {
+            return ResponseEntity.badRequest().body("Portfolio not found for this user");
+        }
     }
 }

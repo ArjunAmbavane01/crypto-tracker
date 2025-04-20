@@ -1,5 +1,6 @@
 package org.example.cryptoportfolio.model;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -23,5 +24,6 @@ public class PortfolioCoin {
 
     @ManyToOne
     @JoinColumn(name = "portfolio_id")
+    @JsonBackReference
     private Portfolio portfolio;
 }

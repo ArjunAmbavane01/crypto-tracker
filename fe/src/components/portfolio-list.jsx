@@ -11,44 +11,44 @@ import { CreatePortfolioDialog } from "@/components/create-portfolio-dialog"
 import { toast } from "sonner"
 
 // Mock data for portfolios
-const mockPortfolios = [
-  {
-    id: "1",
-    name: "Main Portfolio",
-    isLocked: true,
-    totalValue: 12567.89,
-    change24h: 3.45,
-    coins: [
-      { id: "bitcoin", name: "Bitcoin", symbol: "BTC", amount: 0.5, value: 8765.43, change24h: 2.1 },
-      { id: "ethereum", name: "Ethereum", symbol: "ETH", amount: 4.2, value: 3456.78, change24h: 5.6 },
-      { id: "cardano", name: "Cardano", symbol: "ADA", amount: 1000, value: 345.68, change24h: -1.2 },
-    ],
-  },
-  {
-    id: "2",
-    name: "Experimental Portfolio",
-    isLocked: false,
-    totalValue: 5432.1,
-    change24h: -2.34,
-    coins: [
-      { id: "solana", name: "Solana", symbol: "SOL", amount: 25, value: 2345.67, change24h: -4.3 },
-      { id: "polkadot", name: "Polkadot", symbol: "DOT", amount: 100, value: 1234.56, change24h: 1.2 },
-      { id: "avalanche", name: "Avalanche", symbol: "AVAX", amount: 30, value: 1851.87, change24h: -1.8 },
-    ],
-  },
-  {
-    id: "3",
-    name: "Long-term Holds",
-    isLocked: true,
-    totalValue: 8765.43,
-    change24h: 1.23,
-    coins: [
-      { id: "bitcoin", name: "Bitcoin", symbol: "BTC", amount: 0.3, value: 5259.26, change24h: 2.1 },
-      { id: "ethereum", name: "Ethereum", symbol: "ETH", amount: 2.5, value: 2057.85, change24h: 5.6 },
-      { id: "chainlink", name: "Chainlink", symbol: "LINK", amount: 150, value: 1448.32, change24h: -3.4 },
-    ],
-  },
-]
+// const mockPortfolios = [
+//   {
+//     id: "1",
+//     name: "Main Portfolio",
+//     isLocked: true,
+//     totalValue: 12567.89,
+//     change24h: 3.45,
+//     coins: [
+//       { id: "bitcoin", name: "Bitcoin", symbol: "BTC", amount: 0.5, value: 8765.43, change24h: 2.1 },
+//       { id: "ethereum", name: "Ethereum", symbol: "ETH", amount: 4.2, value: 3456.78, change24h: 5.6 },
+//       { id: "cardano", name: "Cardano", symbol: "ADA", amount: 1000, value: 345.68, change24h: -1.2 },
+//     ],
+//   },
+//   {
+//     id: "2",
+//     name: "Experimental Portfolio",
+//     isLocked: false,
+//     totalValue: 5432.1,
+//     change24h: -2.34,
+//     coins: [
+//       { id: "solana", name: "Solana", symbol: "SOL", amount: 25, value: 2345.67, change24h: -4.3 },
+//       { id: "polkadot", name: "Polkadot", symbol: "DOT", amount: 100, value: 1234.56, change24h: 1.2 },
+//       { id: "avalanche", name: "Avalanche", symbol: "AVAX", amount: 30, value: 1851.87, change24h: -1.8 },
+//     ],
+//   },
+//   {
+//     id: "3",
+//     name: "Long-term Holds",
+//     isLocked: true,
+//     totalValue: 8765.43,
+//     change24h: 1.23,
+//     coins: [
+//       { id: "bitcoin", name: "Bitcoin", symbol: "BTC", amount: 0.3, value: 5259.26, change24h: 2.1 },
+//       { id: "ethereum", name: "Ethereum", symbol: "ETH", amount: 2.5, value: 2057.85, change24h: 5.6 },
+//       { id: "chainlink", name: "Chainlink", symbol: "LINK", amount: 150, value: 1448.32, change24h: -3.4 },
+//     ],
+//   },
+// ]
 
 export function PortfolioList() {
   const [portfolios, setPortfolios] = useState(mockPortfolios)
@@ -103,7 +103,7 @@ export function PortfolioList() {
 
         <TabsContent value="all" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {portfolios.map((portfolio) => (
+            {portfolios.length === 0 ? "You dont have any portfolios": portfolios.map((portfolio) => (
               <PortfolioCard
                 key={portfolio.name}
                 portfolio={portfolio}
@@ -116,7 +116,7 @@ export function PortfolioList() {
 
         <TabsContent value="locked" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {portfolios
+            {portfolios.length === 0 ? "You dont have any portfolios": portfolios
               .filter((portfolio) => portfolio.isLocked)
               .map((portfolio) => (
                 <PortfolioCard
@@ -131,7 +131,7 @@ export function PortfolioList() {
 
         <TabsContent value="temp" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {portfolios
+            {portfolios.length === 0 ? "You dont have any portfolios": portfolios
               .filter((portfolio) => !portfolio.isLocked)
               .map((portfolio) => (
                 <PortfolioCard
