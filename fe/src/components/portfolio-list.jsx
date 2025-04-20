@@ -1,87 +1,155 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { ArrowDown, ArrowUp, Lock, LockOpen, MoreHorizontal, Plus, Trash } from "lucide-react"
-
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CreatePortfolioDialog } from "@/components/create-portfolio-dialog"
 import { toast } from "sonner"
-
-// Mock data for portfolios
-// const mockPortfolios = [
-//   {
-//     id: "1",
-//     name: "Main Portfolio",
-//     isLocked: true,
-//     totalValue: 12567.89,
-//     change24h: 3.45,
-//     coins: [
-//       { id: "bitcoin", name: "Bitcoin", symbol: "BTC", amount: 0.5, value: 8765.43, change24h: 2.1 },
-//       { id: "ethereum", name: "Ethereum", symbol: "ETH", amount: 4.2, value: 3456.78, change24h: 5.6 },
-//       { id: "cardano", name: "Cardano", symbol: "ADA", amount: 1000, value: 345.68, change24h: -1.2 },
-//     ],
-//   },
-//   {
-//     id: "2",
-//     name: "Experimental Portfolio",
-//     isLocked: false,
-//     totalValue: 5432.1,
-//     change24h: -2.34,
-//     coins: [
-//       { id: "solana", name: "Solana", symbol: "SOL", amount: 25, value: 2345.67, change24h: -4.3 },
-//       { id: "polkadot", name: "Polkadot", symbol: "DOT", amount: 100, value: 1234.56, change24h: 1.2 },
-//       { id: "avalanche", name: "Avalanche", symbol: "AVAX", amount: 30, value: 1851.87, change24h: -1.8 },
-//     ],
-//   },
-//   {
-//     id: "3",
-//     name: "Long-term Holds",
-//     isLocked: true,
-//     totalValue: 8765.43,
-//     change24h: 1.23,
-//     coins: [
-//       { id: "bitcoin", name: "Bitcoin", symbol: "BTC", amount: 0.3, value: 5259.26, change24h: 2.1 },
-//       { id: "ethereum", name: "Ethereum", symbol: "ETH", amount: 2.5, value: 2057.85, change24h: 5.6 },
-//       { id: "chainlink", name: "Chainlink", symbol: "LINK", amount: 150, value: 1448.32, change24h: -3.4 },
-//     ],
-//   },
-// ]
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useUser } from "@clerk/clerk-react"
 
 export function PortfolioList() {
-  const [portfolios, setPortfolios] = useState(mockPortfolios)
+  const [portfolios, setPortfolios] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showCreatePortfolio, setShowCreatePortfolio] = useState(false)
+  const {user} = useUser();
 
-  const handleLockPortfolio = (id) => {
-    setPortfolios(
-      portfolios.map((portfolio) =>
-        portfolio.id === id ? { ...portfolio, isLocked: !portfolio.isLocked } : portfolio,
-      ),
-    )
+  // Fetch portfolios on component mount
+  useEffect(() => {
+    fetchPortfolios()
+  }, [])
 
-    const portfolio = portfolios.find((p) => p.id === id)
-
-    toast.success(`${portfolio?.isLocked ? "Portfolio unlocked" : "Portfolio locked"}`,{
-      description: `${portfolio?.name} has been ${portfolio?.isLocked ? "unlocked" : "locked"}.`,
-    })
-   
+  const fetchPortfolios = async () => {
+    setIsLoading(true)
+    setError(null)
+    
+    try {
+      const response = await fetch(`http://localhost:8080/api/portfolios/user/${user.id}`)
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch portfolios: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      
+      // Transform the data to match our component's expected format
+      const transformedPortfolios = data.map(portfolio => ({
+        id: portfolio.id,
+        name: portfolio.name || "Unnamed Portfolio",
+        isLocked: portfolio.locked || false,
+        totalValue: portfolio.totalValue || 0,
+        change24h: portfolio.change24h || 0,
+        coins: (portfolio.portfolioCoins || []).map(coin => ({
+          id: coin.coinId || coin.symbol,
+          name: coin.name,
+          symbol: coin.symbol,
+          amount: coin.amount,
+          value: coin.value,
+          change24h: coin.change24h
+        }))
+      }))
+      
+      setPortfolios(transformedPortfolios)
+    } catch (err) {
+      console.error("Error fetching portfolios:", err)
+      setError(err.message)
+      toast.error("Failed to load portfolios", {
+        description: err.message,
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleDeletePortfolio = (id) => {
-    const portfolio = portfolios.find((p) => p.id === id)
+  const handleLockPortfolio = async (id) => {
+    try {
+      const portfolio = portfolios.find(p => p.id === id)
+      const newLockedStatus = !portfolio.isLocked
+      
+      setPortfolios(
+        portfolios.map(portfolio =>
+          portfolio.id === id ? { ...portfolio, isLocked: newLockedStatus } : portfolio
+        )
+      )
+      
+      // // API call to update lock status
+      // const response = await fetch(`/api/portfolios/${id}/lock`, {
+      //   method: 'PUT',
+      //   headers: {
+      //     'Content-Type': 'application/json',
+      //   },
+      //   body: JSON.stringify({ locked: newLockedStatus }),
+      // })
+      
+      // if (!response.ok) {
+      //   throw new Error(`Failed to update portfolio: ${response.status}`)
+      // }
+      
+      toast.success(`Portfolio ${newLockedStatus ? "locked" : "unlocked"}`, {
+        description: `${portfolio?.name} has been ${newLockedStatus ? "locked" : "unlocked"}.`,
+      })
+    } catch (err) {
+      console.error("Error updating portfolio:", err)
+      // Revert the optimistic update
+      fetchPortfolios()
+      toast.error("Failed to update portfolio", {
+        description: err.message,
+      })
+    }
+  }
 
-    setPortfolios(portfolios.filter((portfolio) => portfolio.id !== id))
-
-    toast.success("Portfolio deleted",{
-      description: `${portfolio?.name} has been deleted.`,
-    })
-   
+  const handleDeletePortfolio = async (id) => {
+    try {
+      const portfolio = portfolios.find(p => p.id === id)
+      console.log(portfolio);
+      setPortfolios(portfolios.filter(p => p.id !== id))
+      
+      const response = await fetch(`http://localhost:8080/api/portfolios/delete?clerkId=${user.id}&portfolioName=${portfolio.name}`, {
+        method: 'DELETE',
+      });
+      console.log(response);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to delete portfolio: ${response.status}`)
+      }
+      
+      toast.success("Portfolio deleted", {
+        description: `${portfolio?.name} has been deleted.`,
+      })
+    } catch (err) {
+      console.error("Error deleting portfolio:", err)
+      fetchPortfolios()
+      toast.error("Failed to delete portfolio", {
+        description: err.message,
+      })
+    }
   }
 
   const addPortfolio = (portfolio) => {
     setPortfolios([...portfolios, portfolio])
+  }
+
+  if (isLoading && portfolios.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 space-y-4">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-muted-foreground">Loading your portfolios...</p>
+      </div>
+    )
+  }
+
+  if (error && portfolios.length === 0) {
+    return (
+      <Alert variant="destructive" className="mb-6">
+        <AlertDescription>
+          {error}. Please try refreshing the page or contact support if the problem persists.
+        </AlertDescription>
+      </Alert>
+    )
   }
 
   return (
@@ -102,45 +170,76 @@ export function PortfolioList() {
         </TabsList>
 
         <TabsContent value="all" className="space-y-4">
+          {error && (
+            <Alert variant="destructive" className="mb-6">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          
+          {isLoading && portfolios.length > 0 && (
+            <div className="flex items-center justify-center p-4">
+              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mr-2"></div>
+              <span>Refreshing...</span>
+            </div>
+          )}
+          
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {portfolios.length === 0 ? "You dont have any portfolios": portfolios.map((portfolio) => (
-              <PortfolioCard
-                key={portfolio.name}
-                portfolio={portfolio}
-                onLock={handleLockPortfolio}
-                onDelete={handleDeletePortfolio}
-              />
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="locked" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {portfolios.length === 0 ? "You dont have any portfolios": portfolios
-              .filter((portfolio) => portfolio.isLocked)
-              .map((portfolio) => (
+            {portfolios.length === 0 ? (
+              <div className="col-span-full text-center py-12 text-muted-foreground">
+                You don't have any portfolios yet. Create one to get started.
+              </div>
+            ) : (
+              portfolios.map((portfolio) => (
                 <PortfolioCard
                   key={portfolio.id}
                   portfolio={portfolio}
                   onLock={handleLockPortfolio}
                   onDelete={handleDeletePortfolio}
                 />
-              ))}
+              ))
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="locked" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {portfolios.filter(p => p.isLocked).length === 0 ? (
+              <div className="col-span-full text-center py-12 text-muted-foreground">
+                You don't have any locked portfolios.
+              </div>
+            ) : (
+              portfolios
+                .filter((portfolio) => portfolio.isLocked)
+                .map((portfolio) => (
+                  <PortfolioCard
+                    key={portfolio.id}
+                    portfolio={portfolio}
+                    onLock={handleLockPortfolio}
+                    onDelete={handleDeletePortfolio}
+                  />
+                ))
+            )}
           </div>
         </TabsContent>
 
         <TabsContent value="temp" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {portfolios.length === 0 ? "You dont have any portfolios": portfolios
-              .filter((portfolio) => !portfolio.isLocked)
-              .map((portfolio) => (
-                <PortfolioCard
-                  key={portfolio.name}
-                  portfolio={portfolio}
-                  onLock={handleLockPortfolio}
-                  onDelete={handleDeletePortfolio}
-                />
-              ))}
+            {portfolios.filter(p => !p.isLocked).length === 0 ? (
+              <div className="col-span-full text-center py-12 text-muted-foreground">
+                You don't have any temporary portfolios.
+              </div>
+            ) : (
+              portfolios
+                .filter((portfolio) => !portfolio.isLocked)
+                .map((portfolio) => (
+                  <PortfolioCard
+                    key={portfolio.id}
+                    portfolio={portfolio}
+                    onLock={handleLockPortfolio}
+                    onDelete={handleDeletePortfolio}
+                  />
+                ))
+            )}
           </div>
         </TabsContent>
       </Tabs>
@@ -148,15 +247,23 @@ export function PortfolioList() {
       <CreatePortfolioDialog
         open={showCreatePortfolio}
         onOpenChange={setShowCreatePortfolio}
-        onPortfolioCreated={addPortfolio}
+        onPortfolioCreated={(newPortfolio) => {
+          addPortfolio(newPortfolio)
+          toast.success("Portfolio created", {
+            description: `${newPortfolio.name} has been created successfully.`
+          })
+        }}
       />
     </>
   )
 }
 
 function PortfolioCard({ portfolio, onLock, onDelete }) {
+  // Handle empty or undefined coins array
+  const coins = portfolio.coins || []
+  
   return (
-    <Card>
+    <Card className="transition-all hover:shadow-md">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -174,7 +281,7 @@ function PortfolioCard({ portfolio, onLock, onDelete }) {
                 <span className="sr-only">Open menu</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="bg-white">
               <DropdownMenuItem onClick={() => onLock(portfolio.id)}>
                 {portfolio.isLocked ? (
                   <>
@@ -188,7 +295,12 @@ function PortfolioCard({ portfolio, onLock, onDelete }) {
                   </>
                 )}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onDelete(portfolio.id)}>
+              <DropdownMenuItem 
+                onClick={() => {
+                    onDelete(portfolio.id)
+                }}
+                className="text-red-500 focus:text-red-500"
+              >
                 <Trash className="mr-2 h-4 w-4" />
                 <span>Delete Portfolio</span>
               </DropdownMenuItem>
@@ -200,28 +312,54 @@ function PortfolioCard({ portfolio, onLock, onDelete }) {
       <CardContent>
         <div className="flex items-center justify-between mb-4">
           <div className="text-2xl font-bold">${portfolio.totalValue.toLocaleString()}</div>
-          <div className={`flex items-center ${portfolio.change24h >= 0 ? "text-green-500" : "text-red-500"}`}>
-            {portfolio.change24h >= 0 ? <ArrowUp className="mr-1 h-4 w-4" /> : <ArrowDown className="mr-1 h-4 w-4" />}
+          <div 
+            className={`flex items-center font-medium ${
+              portfolio.change24h > 0 
+                ? "text-green-500" 
+                : portfolio.change24h < 0 
+                  ? "text-red-500" 
+                  : "text-muted-foreground"
+            }`}
+          >
+            {portfolio.change24h > 0 ? (
+              <ArrowUp className="mr-1 h-4 w-4" />
+            ) : portfolio.change24h < 0 ? (
+              <ArrowDown className="mr-1 h-4 w-4" />
+            ) : null}
             {Math.abs(portfolio.change24h).toFixed(2)}%
           </div>
         </div>
-        <div className="space-y-2">
-          {portfolio.coins.map((coin) => (
-            <div key={coin.id} className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="font-medium">{coin.symbol}</div>
-                <div className="text-xs text-muted-foreground">{coin.amount}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div>${coin.value.toLocaleString()}</div>
-                <div className={`text-xs ${coin.change24h >= 0 ? "text-green-500" : "text-red-500"}`}>
-                  {coin.change24h >= 0 ? "+" : ""}
-                  {coin.change24h.toFixed(2)}%
+        {coins.length === 0 ? (
+          <div className="text-center py-2 text-sm text-muted-foreground">
+            No coins in this portfolio
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {coins.map((coin) => (
+              <div key={`${portfolio.id}-${coin.id || coin.symbol}`} className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="font-medium">{coin.symbol?.toUpperCase()}</div>
+                  <div className="text-xs text-muted-foreground">{coin.amount}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div>${coin.value?.toLocaleString() || "0"}</div>
+                  <div 
+                    className={`text-xs ${
+                      coin.change24h > 0 
+                        ? "text-green-500" 
+                        : coin.change24h < 0 
+                          ? "text-red-500" 
+                          : "text-muted-foreground"
+                    }`}
+                  >
+                    {coin.change24h > 0 ? "+" : coin.change24h < 0 ? "" : "±"}
+                    {coin.change24h?.toFixed(2) || "0.00"}%
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </CardContent>
       <CardFooter>
         <Button variant="outline" className="w-full" size="sm">
