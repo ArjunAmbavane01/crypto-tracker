@@ -15,21 +15,20 @@ import {
 } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { Switch } from "./ui/switch";
 import { toast } from "sonner";
 
-export function CreatePortfolioDialog({
+export function EditPortfolioDialog({
   open,
   onOpenChange,
-  onPortfolioCreated,
+  onPortfolioUpdated,
+  portfolio,
 }) {
   const [portfolioName, setPortfolioName] = useState("");
-  const [isLocked, setIsLocked] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCoins, setSelectedCoins] = useState([]);
   const [coinAmounts, setCoinAmounts] = useState({});
   const [availableCoins, setAvailableCoins] = useState([]);
-  const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [formErrors, setFormErrors] = useState({
@@ -41,8 +40,38 @@ export function CreatePortfolioDialog({
   const { user, isLoaded } = useUser();
 
   useEffect(() => {
+    if (open && portfolio) {
+      setPortfolioName(portfolio.name || "");
+      
+      // Initialize selected coins from portfolio with price data
+      const coins = portfolio.coins || [];
+      const coinsWithPrice = coins.map(coin => ({
+        ...coin,
+        price: coin.value / (coin.amount || 1) // Calculate price if not available
+      }));
+      setSelectedCoins(coinsWithPrice);
+      
+      // Initialize coin amounts
+      const amounts = {};
+      coins.forEach(coin => {
+        amounts[coin.id] = coin.amount;
+      });
+      setCoinAmounts(amounts);
+      
+      // Reset form errors
+      setFormErrors({
+        portfolioName: "",
+        selectedCoins: "",
+        coinAmounts: {},
+      });
+      setError(null);
+    }
+  }, [open, portfolio]);
+
+  useEffect(() => {
     const fetchCoins = async () => {
       if (open) {
+        setIsLoading(true);
         try {
           const res = await fetch("http://localhost:8080/api/market/coins");
           const data = await res.json();
@@ -51,6 +80,8 @@ export function CreatePortfolioDialog({
           toast.error("Failed to fetch coins", {
             description: "Try refreshing the page.",
           });
+        } finally {
+          setIsLoading(false);
         }
       }
     };
@@ -66,7 +97,6 @@ export function CreatePortfolioDialog({
 
   const resetForm = () => {
     setPortfolioName("");
-    setIsLocked(false);
     setSearchTerm("");
     setSelectedCoins([]);
     setCoinAmounts({});
@@ -80,8 +110,9 @@ export function CreatePortfolioDialog({
 
   const filteredCoins = availableCoins.filter(
     (coin) =>
-      coin.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      coin.symbol?.toLowerCase().includes(searchTerm.toLowerCase())
+      !selectedCoins.some(selected => selected.id === coin.id) &&
+      (coin.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      coin.symbol?.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const handleSelectCoin = (coin) => {
@@ -189,12 +220,12 @@ export function CreatePortfolioDialog({
     return isValid;
   };
 
-  const handleCreatePortfolio = async () => {
+  const handleUpdatePortfolio = async () => {
     if (!validateForm()) {
       return;
     }
 
-    setIsCreating(true);
+    setIsUpdating(true);
 
     try {
       if (!isLoaded || !user) {
@@ -204,10 +235,11 @@ export function CreatePortfolioDialog({
       const clerkId = user.id;
       const totalValue = calculateTotalValue();
 
-      const newPortfolio = {
+      const updatedPortfolio = {
         userId: clerkId,
+        id: portfolio.id,
+        originalName: portfolio.name, // Used to identify the portfolio to update
         name: portfolioName,
-        isLocked,
         totalValue,
         change24h: 0, // We'll calculate this properly
         coins: selectedCoins.map((coin) => {
@@ -225,54 +257,45 @@ export function CreatePortfolioDialog({
       };
 
       // Calculate portfolio 24h change as weighted average of coins
-      if (newPortfolio.totalValue > 0) {
-        newPortfolio.change24h =
-          newPortfolio.coins.reduce(
+      if (updatedPortfolio.totalValue > 0) {
+        updatedPortfolio.change24h =
+          updatedPortfolio.coins.reduce(
             (acc, coin) => acc + coin.change24h * coin.value,
             0
-          ) / newPortfolio.totalValue;
+          ) / updatedPortfolio.totalValue;
       }
 
-      const res = await fetch("http://localhost:8080/api/portfolios", {
-        method: "POST",
+      console.log(updatedPortfolio)
+      const res = await fetch("http://localhost:8080/api/portfolios/update", {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newPortfolio),
+        body: JSON.stringify(updatedPortfolio),
       });
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(
-          errorData.message || `Failed to create portfolio (${res.status})`
+          errorData.message || `Failed to update portfolio (${res.status})`
         );
       }
 
-      // Generate a unique ID for the portfolio if the API doesn't provide one
-      const portfolioId = `${clerkId}-${Date.now()}-${portfolioName.replace(
-        /\s+/g,
-        "-"
-      )}`;
-      const createdPortfolio = {
-        ...newPortfolio,
-        id: portfolioId,
-      };
-
-      if (onPortfolioCreated) {
-        onPortfolioCreated(createdPortfolio);
+      if (onPortfolioUpdated) {
+        onPortfolioUpdated(updatedPortfolio);
       }
 
-      toast.success("Portfolio created", {
-        description: `${portfolioName} has been created successfully.`,
+      toast.success("Portfolio updated", {
+        description: `${portfolioName} has been updated successfully.`,
       });
 
       // Close dialog
       onOpenChange(false);
     } catch (error) {
-      console.error("Failed to create portfolio:", error);
-      toast.error("Creation failed", {
+      console.error("Failed to update portfolio:", error);
+      toast.error("Update failed", {
         description: error.message || "Please try again.",
       });
     } finally {
-      setIsCreating(false);
+      setIsUpdating(false);
     }
   };
 
@@ -280,18 +303,19 @@ export function CreatePortfolioDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px] bg-white">
         <DialogHeader>
-          <DialogTitle>Create New Portfolio</DialogTitle>
+          <DialogTitle>Edit Portfolio</DialogTitle>
           <DialogDescription>
-            Create a new portfolio to track your cryptocurrency investments.
+            Update your portfolio details and coin allocations.
           </DialogDescription>
         </DialogHeader>
 
         {/* Show error if any */}
         {error && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
+          <div className="rounded-md bg-red-50 p-3 mb-4">
+            <div className="flex">
+              <div className="text-red-700">{error}</div>
+            </div>
+          </div>
         )}
 
         <div className="grid gap-4 py-4">
@@ -317,18 +341,7 @@ export function CreatePortfolioDialog({
               className={formErrors.portfolioName ? "border-red-500" : ""}
             />
           </div>
-          <div className="flex items-center gap-2">
-            <Switch
-              id="locked"
-              checked={isLocked}
-              onCheckedChange={setIsLocked}
-              className="bg-gray-100 data-[state=checked]:bg-blue-300 border-2" 
-            />
-            <Label htmlFor="locked" className="flex items-center gap-1">
-              <Lock className="h-4 w-4" />
-              Lock Portfolio
-            </Label>
-          </div>
+
           <div className="grid gap-2">
             <Label className="flex justify-between">
               Add Cryptocurrencies
@@ -406,7 +419,7 @@ export function CreatePortfolioDialog({
                   >
                     <div className="flex items-center gap-2">
                       <div className="h-6 w-6 overflow-hidden rounded-full">
-                        <img
+                        {/* <img
                           src={coin.image || "/placeholder.svg"}
                           alt={coin.name}
                           className="h-full w-full object-cover"
@@ -414,7 +427,7 @@ export function CreatePortfolioDialog({
                             e.target.onerror = null;
                             e.target.src = "/placeholder.svg";
                           }}
-                        />
+                        /> */}
                       </div>
                       <div className="font-medium">
                         {coin.symbol.toUpperCase()}
@@ -469,21 +482,18 @@ export function CreatePortfolioDialog({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={isCreating}
+            disabled={isUpdating}
           >
             Cancel
           </Button>
-          <Button onClick={handleCreatePortfolio} disabled={isCreating}>
-            {isCreating ? (
+          <Button onClick={handleUpdatePortfolio} disabled={isUpdating} className="bg-blue-500 text-white">
+            {isUpdating ? (
               <>
                 <Loader2 className="animate-spin size-4 mr-2" />
-                Creating...
+                Updating...
               </>
             ) : (
-              <>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Portfolio
-              </>
+              "Update Portfolio"
             )}
           </Button>
         </DialogFooter>
